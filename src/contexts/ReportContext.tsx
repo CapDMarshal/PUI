@@ -11,7 +11,8 @@ export interface AiValidation {
   isWaste: boolean;
   confidence: string;
   reason?: string;
-  waste_type?: string;
+  waste_type?: 'organik' | 'anorganik' | 'campuran';
+  hazard_risk?: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi';
   waste_volume?: string;
   location_category?: string;
 }
@@ -19,7 +20,8 @@ export interface AiValidation {
 export interface ReportData {
   location: Location | null;
   photos: string[]; // Base64 encoded images
-  wasteType: 'organik' | 'anorganik' | 'berbahaya' | 'campuran' | null;
+  wasteType: 'organik' | 'anorganik' | 'campuran' | null;
+  hazardRisk: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi' | null;
   wasteVolume: 'kurang_dari_1kg' | '1_5kg' | '6_10kg' | 'lebih_dari_10kg' | null;
   locationCategory: 'sungai' | 'pinggir_jalan' | 'area_publik' | 'tanah_kosong' | 'lainnya' | null;
   notes?: string;
@@ -46,6 +48,7 @@ const initialReportData: ReportData = {
   location: null,
   photos: [],
   wasteType: null,
+  hazardRisk: null,
   wasteVolume: null,
   locationCategory: null,
   notes: '',

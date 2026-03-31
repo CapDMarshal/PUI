@@ -1,0 +1,7 @@
+[project_id = "your-project-ref"]
+
+[functions.submit-report]
+enabled = true
+
+[functions.get-nearby-reports]
+enabled = true

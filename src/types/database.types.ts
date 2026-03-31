@@ -115,9 +115,10 @@ export interface Database {
           user_id: string
           image_urls: string[]
           created_at: string
-          waste_type: string
+          waste_type: 'organik' | 'anorganik' | 'campuran'
           waste_volume: string
           location_category: string
+          hazard_risk: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi'
           notes: string | null
           location: string // PostGIS geography type (returned as GeoJSON or WKT string)
         }
@@ -126,9 +127,10 @@ export interface Database {
           user_id: string
           image_urls: string[]
           created_at?: string
-          waste_type: string
+          waste_type: 'organik' | 'anorganik' | 'campuran'
           waste_volume: string
           location_category: string
+          hazard_risk?: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi' // defaults to 'tidak_ada'
           notes?: string | null
           location: string // PostGIS geography type
         }
@@ -137,9 +139,10 @@ export interface Database {
           user_id?: string
           image_urls?: string[]
           created_at?: string
-          waste_type?: string
+          waste_type?: 'organik' | 'anorganik' | 'campuran'
           waste_volume?: string
           location_category?: string
+          hazard_risk?: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi'
           notes?: string | null
           location?: string // PostGIS geography type
         }
@@ -156,9 +159,10 @@ export interface Database {
           user_id: string
           image_urls: string[]
           created_at: string
-          waste_type: string
+          waste_type: 'organik' | 'anorganik' | 'campuran'
           waste_volume: string
           location_category: string
+          hazard_risk: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi'
           notes: string | null
           latitude: number
           longitude: number
@@ -173,8 +177,8 @@ export interface Database {
           report_count: number
           organic_count: number
           inorganic_count: number
-          hazardous_count: number
           mixed_count: number
+          high_risk_count: number
           avg_latitude: number
           avg_longitude: number
         }[]
@@ -201,11 +205,41 @@ export interface Database {
           total_cleaned_areas: number
         }
       }
+      get_waste_type_statistics: {
+        Args: Record<string, never>
+        Returns: {
+          total: number
+          organic: number
+          inorganic: number
+          mixed: number
+          risk_none: number
+          risk_low: number
+          risk_medium: number
+          risk_high: number
+        }
+      }
+      get_user_reports_with_coordinates: {
+        Args: { p_user_id: string }
+        Returns: {
+          id: number
+          user_id: string
+          image_urls: string[]
+          created_at: string
+          waste_type: 'organik' | 'anorganik' | 'campuran'
+          waste_volume: string
+          location_category: string
+          hazard_risk: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi'
+          notes: string | null
+          latitude: number
+          longitude: number
+        }[]
+      }
     }
     Enums: {
       location_category_enum: 'sungai' | 'pinggir_jalan' | 'area_publik' | 'tanah_kosong' | 'lainnya'
-      waste_type_enum: 'organik' | 'anorganik' | 'berbahaya' | 'campuran'
+      waste_type_enum: 'organik' | 'anorganik' | 'campuran'
       waste_volume_enum: 'kurang_dari_1kg' | '1_5kg' | '6_10kg' | 'lebih_dari_10kg'
+      hazard_risk_enum: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi'
       campaign_status_enum: 'upcoming' | 'ongoing' | 'finished'
       campaign_organizer_type_enum: 'personal' | 'organization'
     }

@@ -18,56 +18,13 @@
 
 ---
 
-### 🔴 BUG-01 — `area_public` vs `area_publik` label key mismatch
+### ✅ ~~BUG-01~~ FIXED — `area_public` vs `area_publik` label key mismatch
 
 | Property | Detail |
 |---|---|
-| **Severity** | 🔴 Critical |
-| **Type** | Wrong enum key in UI label map |
-| **Affected Files** | `src/hooks/useReports.ts` (line ~104) |
-| | `src/app/akun/riwayat-laporan/page.tsx` (line ~91) |
-
-**Description:**  
-Both files define a label lookup map for `location_category` values.
-They use the key `'area_public'` (no `k`), but the value actually stored
-in the database CHECK constraint is `'area_publik'` (with `k`).
-
-As a result, any report with `location_category = 'area_publik'` will
-display the raw database string instead of the human-readable label
-`'Area Publik'`.
-
-**Current (broken) code — `useReports.ts`:**
-```typescript
-function getCategoryLabel(category: string): string {
-  const labels: Record<string, string> = {
-    'sungai': 'Di tengah sungai',
-    'pinggir_jalan': 'Pinggir jalan',
-    'area_public': 'Area publik',   // ← wrong key
-    'tanah_kosong': 'Tanah kosong',
-    'lainnya': 'Lainnya'
-  };
-  return labels[category] || category;
-}
-```
-
-**Fix:**
-```diff
-- 'area_public': 'Area publik',
-+ 'area_publik': 'Area publik',
-```
-
-Apply the same fix in `riwayat-laporan/page.tsx`:
-```diff
-  const getLocationLabel = (location: string) => {
-    const labels: Record<string, string> = {
-      'sungai': 'Sungai',
-      'pinggir_jalan': 'Pinggir Jalan',
--     'area_public': 'Area Publik',
-+     'area_publik': 'Area Publik',
-      'tanah_kosong': 'Tanah Kosong',
-      'lainnya': 'Lainnya'
-    };
-```
+| **Status** | ✅ Fixed (2026-04-01) |
+| **Was** | `'area_public'` (no `k`) in label maps |
+| **Fixed in** | `src/hooks/useReports.ts` · `src/app/akun/riwayat-laporan/page.tsx` |
 
 ---
 
@@ -301,6 +258,9 @@ corrected in the current `supabase_schema.sql`:
 | S-06 | Schema used Postgres ENUM types | Reverted to `TEXT + CHECK` constraints (matches README SQL) |
 | S-07 | `max_participants DEFAULT 50` | Corrected to `DEFAULT 10` (per README SQL; 50 was a TS dev default) |
 | S-08 | `get_reports_with_coordinates` return type was `BIGINT` for `id` | Corrected to `INTEGER` |
+| **S-09** | **`waste_type` had 4 values including `'berbahaya'`** | **Removed `'berbahaya'`; new `hazard_risk` column added (2026-04-01)** |
+| **S-10** | **`get_waste_type_statistics` RPC returned `hazardous` column** | **Replaced with `risk_none/risk_low/risk_medium/risk_high` (2026-04-01)** |
+| **S-11** | **`get_province_statistics` returned `hazardous_count`** | **Replaced with `high_risk_count` based on `hazard_risk` column (2026-04-01)** |
 
 ---
 
@@ -309,7 +269,8 @@ corrected in the current `supabase_schema.sql`:
 If you are forking this project, here is a prioritised action list:
 
 ### Must fix before launch
-- [ ] **BUG-01** — Fix `area_public` → `area_publik` in label maps (2 files)
+- [x] ~~**BUG-01**~~ Fixed — `area_public` → `area_publik` in label maps (done 2026-04-01)
+- [x] ~~**Schema revision**~~ Done — `waste_type` trimmed to 3 values, `hazard_risk` column added (done 2026-04-01)
 - [ ] **BUG-02** — Delete or complete `dashboard/buat-campaign/page.tsx`
 - [ ] **BUG-03** — Remove manual EXP fallback; rely on atomic RPC only
 

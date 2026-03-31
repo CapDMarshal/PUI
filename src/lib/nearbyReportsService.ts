@@ -136,10 +136,22 @@ export function formatWasteType(type: string): string {
   const labels: Record<string, string> = {
     organik: 'Organik',
     anorganik: 'Anorganik',
-    berbahaya: 'Berbahaya',
     campuran: 'Campuran',
   };
   return labels[type] || type;
+}
+
+/**
+ * Format hazard risk label in Indonesian
+ */
+export function formatHazardRisk(risk: string): string {
+  const labels: Record<string, string> = {
+    tidak_ada: 'Tidak Ada',
+    rendah: 'Rendah',
+    menengah: 'Menengah',
+    tinggi: 'Tinggi',
+  };
+  return labels[risk] || risk;
 }
 
 /**

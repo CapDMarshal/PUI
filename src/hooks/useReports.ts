@@ -21,6 +21,7 @@ export interface WasteMarker {
   title: string;
   location: string;
   wasteType: string;
+  hazardRisk: string;
   amount: string;
   category: string;
   images: string[];
@@ -58,6 +59,7 @@ export function useReports() {
         title: getWasteTypeLabel(report.waste_type),
         location: getCategoryLabel(report.location_category),
         wasteType: getWasteTypeLabel(report.waste_type),
+        hazardRisk: (report as any).hazard_risk ?? 'tidak_ada',
         amount: getVolumeLabel(report.waste_volume),
         category: getCategoryLabel(report.location_category),
         images: report.image_urls,
@@ -81,7 +83,6 @@ function getWasteTypeLabel(type: string): string {
   const labels: Record<string, string> = {
     'organik': 'Organik',
     'anorganik': 'Anorganik',
-    'berbahaya': 'Berbahaya',
     'campuran': 'Campuran'
   };
   return labels[type] || type;
@@ -101,7 +102,7 @@ function getCategoryLabel(category: string): string {
   const labels: Record<string, string> = {
     'sungai': 'Di tengah sungai',
     'pinggir_jalan': 'Pinggir jalan',
-    'area_public': 'Area publik',
+    'area_publik': 'Area publik',       // ← BUG-01 fixed: was 'area_public'
     'tanah_kosong': 'Tanah kosong',
     'lainnya': 'Lainnya'
   };

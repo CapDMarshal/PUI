@@ -64,11 +64,13 @@ CREATE TABLE IF NOT EXISTS public.reports (
   image_urls        TEXT[]          NOT NULL DEFAULT '{}',
   created_at        TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
   waste_type        TEXT            NOT NULL
-    CHECK (waste_type        IN ('organik','anorganik','berbahaya','campuran')),
+    CHECK (waste_type        IN ('organik','anorganik','campuran')),   -- 'berbahaya' removed; use hazard_risk instead
   waste_volume      TEXT            NOT NULL
     CHECK (waste_volume      IN ('kurang_dari_1kg','1_5kg','6_10kg','lebih_dari_10kg')),
   location_category TEXT            NOT NULL
     CHECK (location_category IN ('sungai','pinggir_jalan','area_publik','tanah_kosong','lainnya')),
+  hazard_risk       TEXT            NOT NULL DEFAULT 'tidak_ada'
+    CHECK (hazard_risk       IN ('tidak_ada','rendah','menengah','tinggi')),
   notes             TEXT,
   location          GEOGRAPHY(POINT, 4326) NOT NULL   -- stored as POINT(longitude latitude)
 );
@@ -394,8 +396,8 @@ RETURNS TABLE (
   report_count    BIGINT,
   organic_count   BIGINT,
   inorganic_count BIGINT,
-  hazardous_count BIGINT,
   mixed_count     BIGINT,
+  high_risk_count BIGINT,
   avg_latitude    DOUBLE PRECISION,
   avg_longitude   DOUBLE PRECISION
 )
@@ -406,14 +408,14 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    ('Region ' || ROUND(ST_Y(r.location::geometry))::TEXT)  AS province_name,
-    COUNT(*)                                                  AS report_count,
-    COUNT(*) FILTER (WHERE r.waste_type = 'organik')         AS organic_count,
-    COUNT(*) FILTER (WHERE r.waste_type = 'anorganik')       AS inorganic_count,
-    COUNT(*) FILTER (WHERE r.waste_type = 'berbahaya')       AS hazardous_count,
-    COUNT(*) FILTER (WHERE r.waste_type = 'campuran')        AS mixed_count,
-    AVG(ST_Y(r.location::geometry))                          AS avg_latitude,
-    AVG(ST_X(r.location::geometry))                          AS avg_longitude
+    ('Region ' || ROUND(ST_Y(r.location::geometry))::TEXT)   AS province_name,
+    COUNT(*)                                                   AS report_count,
+    COUNT(*) FILTER (WHERE r.waste_type = 'organik')          AS organic_count,
+    COUNT(*) FILTER (WHERE r.waste_type = 'anorganik')        AS inorganic_count,
+    COUNT(*) FILTER (WHERE r.waste_type = 'campuran')         AS mixed_count,
+    COUNT(*) FILTER (WHERE r.hazard_risk IN ('menengah','tinggi')) AS high_risk_count,
+    AVG(ST_Y(r.location::geometry))                           AS avg_latitude,
+    AVG(ST_X(r.location::geometry))                           AS avg_longitude
   FROM public.reports r
   GROUP BY ROUND(ST_Y(r.location::geometry))
   ORDER BY report_count DESC
@@ -504,11 +506,14 @@ $$;
 -- Used by: statisticsService.fetchWasteTypeStatistics()
 CREATE OR REPLACE FUNCTION public.get_waste_type_statistics()
 RETURNS TABLE (
-  total     BIGINT,
-  organic   BIGINT,
-  inorganic BIGINT,
-  hazardous BIGINT,
-  mixed     BIGINT
+  total       BIGINT,
+  organic     BIGINT,
+  inorganic   BIGINT,
+  mixed       BIGINT,
+  risk_none   BIGINT,
+  risk_low    BIGINT,
+  risk_medium BIGINT,
+  risk_high   BIGINT
 )
 LANGUAGE plpgsql
 STABLE
@@ -517,11 +522,14 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    COUNT(*)                                          AS total,
-    COUNT(*) FILTER (WHERE waste_type = 'organik')   AS organic,
-    COUNT(*) FILTER (WHERE waste_type = 'anorganik') AS inorganic,
-    COUNT(*) FILTER (WHERE waste_type = 'berbahaya') AS hazardous,
-    COUNT(*) FILTER (WHERE waste_type = 'campuran')  AS mixed
+    COUNT(*)                                             AS total,
+    COUNT(*) FILTER (WHERE waste_type = 'organik')      AS organic,
+    COUNT(*) FILTER (WHERE waste_type = 'anorganik')    AS inorganic,
+    COUNT(*) FILTER (WHERE waste_type = 'campuran')     AS mixed,
+    COUNT(*) FILTER (WHERE hazard_risk = 'tidak_ada')   AS risk_none,
+    COUNT(*) FILTER (WHERE hazard_risk = 'rendah')      AS risk_low,
+    COUNT(*) FILTER (WHERE hazard_risk = 'menengah')    AS risk_medium,
+    COUNT(*) FILTER (WHERE hazard_risk = 'tinggi')      AS risk_high
   FROM public.reports;
 END;
 $$;
@@ -558,6 +566,53 @@ BEGIN
   END IF;
 
   RETURN QUERY SELECT v_new_exp;
+END;
+$$;
+
+
+-- ── 7k. insert_report_with_location ─────────────────────────
+-- Called by the submit-report Edge Function (SECURITY DEFINER so it
+-- bypasses RLS when called from the service-role context).
+-- Accepts flat parameters and constructs the PostGIS POINT internally.
+-- Returns the new row's id and created_at.
+CREATE OR REPLACE FUNCTION public.insert_report_with_location(
+  p_user_id           UUID,
+  p_image_urls        TEXT[],
+  p_waste_type        TEXT,
+  p_hazard_risk       TEXT,
+  p_waste_volume      TEXT,
+  p_location_category TEXT,
+  p_notes             TEXT,
+  p_latitude          DOUBLE PRECISION,
+  p_longitude         DOUBLE PRECISION
+)
+RETURNS TABLE (id INTEGER, created_at TIMESTAMPTZ)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  INSERT INTO public.reports (
+    user_id,
+    image_urls,
+    waste_type,
+    hazard_risk,
+    waste_volume,
+    location_category,
+    notes,
+    location
+  )
+  VALUES (
+    p_user_id,
+    p_image_urls,
+    p_waste_type,
+    p_hazard_risk,
+    p_waste_volume,
+    p_location_category,
+    p_notes,
+    ST_GeogFromText('POINT(' || p_longitude || ' ' || p_latitude || ')')
+  )
+  RETURNING reports.id, reports.created_at;
 END;
 $$;
 
@@ -646,13 +701,20 @@ $$;
 
 
 -- ============================================================
--- 10. ENVIRONMENT VARIABLES  (.env.local)
+-- 10. ENVIRONMENT VARIABLES  (.env.local + Supabase Secrets)
 -- ============================================================
 --
--- NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
--- NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
--- SUPABASE_SERVICE_ROLE_KEY=<service-role-key>   ← server-side only (API routes)
--- NEXT_PUBLIC_MAPTILER_API_KEY=<maptiler-key>    ← map tiles
+-- Next.js (.env.local):
+--   NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+--   NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+--   SUPABASE_SERVICE_ROLE_KEY=<service-role-key>   ← server-side only (API routes)
+--   NEXT_PUBLIC_MAPTILER_API_KEY=<maptiler-key>    ← map tiles
+--
+-- Edge Function secrets (Supabase Dashboard → Project Settings → Edge Functions → Secrets):
+--   GEMINI_API_KEY=<gemini-key>   ← required by submit-report function
+--   SUPABASE_URL                  ← auto-injected by Supabase
+--   SUPABASE_ANON_KEY             ← auto-injected by Supabase
+--   SUPABASE_SERVICE_ROLE_KEY     ← must be set manually in secrets
 
 
 -- ============================================================
@@ -668,29 +730,31 @@ $$;
 
 
 -- ============================================================
--- 12. KNOWN FRONTEND ISSUES (schema is correct; bugs are in UI code)
+-- 12. SCHEMA REVISION LOG & KNOWN ISSUES
 -- ============================================================
 --
--- ① 'area_public' vs 'area_publik' label mismatch
---   Files:  src/hooks/useReports.ts (line ~104)
---           src/app/akun/riwayat-laporan/page.tsx (line ~91)
---   Both map 'area_public' (missing 'k') as a label key in their
---   getCategoryLabel / getLocationLabel functions.
---   The actual DB CHECK constraint value is 'area_publik' (with 'k').
---   Fix: Change 'area_public' → 'area_publik' in those label maps.
---   Schema is correct as-is.
+-- ── Revision: reports.hazard_risk (applied 2026-04-01) ───────────────────────
+--   Removed 'berbahaya' from waste_type CHECK (now: organik, anorganik, campuran).
+--   Added hazard_risk column: NOT NULL DEFAULT 'tidak_ada'
+--     CHECK (hazard_risk IN ('tidak_ada','rendah','menengah','tinggi')).
+--   Rationale: separates waste classification from hazard level, allowing
+--   any waste type to carry an independent risk assessment.
+--   All downstream code (TypeScript types, services, label maps, edge function)
+--   has been updated to match.
 --
--- ② dashboard/buat-campaign/page.tsx is a PROTOTYPE
---   This page has a TODO comment and does NOT write to Supabase.
---   The real create-campaign flow is at /buat-campaign (CreateCampaignForm.tsx)
---   which does a proper INSERT into public.campaigns.
---   If you fork this project, remove or complete the dashboard version.
+-- ── Fixed: BUG-01 'area_public' typo (applied 2026-04-01) ─────────────────
+--   getCategoryLabel() / getLocationLabel() in two frontend files used
+--   'area_public' (no 'k') as a label key. Fixed to 'area_publik' in:
+--     src/hooks/useReports.ts
+--     src/app/akun/riwayat-laporan/page.tsx
 --
--- ③ /revalidasi flow is INCOMPLETE
---   The revalidation pages (revalidasi/, revalidasi/foto/, revalidasi/konfirmasi-data/)
---   capture location + photos client-side but do NOT write to any DB table.
---   There is no 'revalidations' table because the feature was never finished.
---   If you need it, add a table like:
+-- ── Still open: dashboard/buat-campaign is a prototype ────────────────
+--   src/app/dashboard/buat-campaign/page.tsx has a // TODO and does not
+--   write to Supabase. The real flow is at /buat-campaign.
+--
+-- ── Still open: /revalidasi flow is incomplete ──────────────────────
+--   The revalidation pages capture data client-side but do NOT write to DB.
+--   There is no 'revalidations' table. If you want to implement it, add:
 --
 --   CREATE TABLE public.revalidations (
 --     id          SERIAL      PRIMARY KEY,
@@ -703,7 +767,11 @@ $$;
 --     longitude   DOUBLE PRECISION,
 --     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 --   );
-
+--
+-- ── Edge Functions ─────────────────────────────────────────────────
+--   Source is now in supabase/functions/ (version-controlled).
+--   Deploy: supabase functions deploy submit-report
+--           supabase functions deploy get-nearby-reports
 
 -- ============================================================
 -- 13. VERIFICATION QUERIES  (run after setup to confirm)

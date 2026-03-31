@@ -5,8 +5,8 @@ export interface ProvinceStatistics {
   report_count: number;
   organic_count: number;
   inorganic_count: number;
-  hazardous_count: number;
   mixed_count: number;
+  high_risk_count: number;
   avg_latitude: number;
   avg_longitude: number;
 }
@@ -70,14 +70,12 @@ export function calculateStatistics(reports: MapReport[]) {
   const total = reports.length;
   const organic = reports.filter(r => r.waste_type === 'organik').length;
   const inorganic = reports.filter(r => r.waste_type === 'anorganik').length;
-  const hazardous = reports.filter(r => r.waste_type === 'berbahaya').length;
   const mixed = reports.filter(r => r.waste_type === 'campuran').length;
 
   return {
     total,
     organic,
     inorganic,
-    hazardous,
-    mixed
+    mixed,
   };
 }

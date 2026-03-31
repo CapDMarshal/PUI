@@ -20,8 +20,11 @@ export interface WasteTypeStatistics {
   total: number;
   organic: number;
   inorganic: number;
-  hazardous: number;
   mixed: number;
+  riskNone: number;
+  riskLow: number;
+  riskMedium: number;
+  riskHigh: number;
 }
 
 /**
@@ -81,16 +84,22 @@ export async function fetchWasteTypeStatistics(): Promise<WasteTypeStatistics> {
       total: Number(data?.total || 0),
       organic: Number(data?.organic || 0),
       inorganic: Number(data?.inorganic || 0),
-      hazardous: Number(data?.hazardous || 0),
       mixed: Number(data?.mixed || 0),
+      riskNone: Number(data?.risk_none || 0),
+      riskLow: Number(data?.risk_low || 0),
+      riskMedium: Number(data?.risk_medium || 0),
+      riskHigh: Number(data?.risk_high || 0),
     };
   } catch (error) {
     return {
       total: 0,
       organic: 0,
       inorganic: 0,
-      hazardous: 0,
       mixed: 0,
+      riskNone: 0,
+      riskLow: 0,
+      riskMedium: 0,
+      riskHigh: 0,
     };
   }
 }

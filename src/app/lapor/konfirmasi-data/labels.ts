@@ -1,8 +1,14 @@
 export const WASTE_TYPE_LABELS = {
   organik: 'Organik',
   anorganik: 'Anorganik',
-  berbahaya: 'Berbahaya',
   campuran: 'Campuran',
+};
+
+export const HAZARD_RISK_LABELS = {
+  tidak_ada: 'Tidak Ada',
+  rendah: 'Rendah',
+  menengah: 'Menengah',
+  tinggi: 'Tinggi',
 };
 
 export const WASTE_VOLUME_LABELS = {

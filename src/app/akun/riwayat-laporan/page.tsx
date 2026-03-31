@@ -68,10 +68,29 @@ export default function RiwayatLaporanPage() {
     const labels: Record<string, string> = {
       'organik': 'Organik',
       'anorganik': 'Anorganik',
-      'berbahaya': 'Berbahaya',
       'campuran': 'Campuran'
     };
     return labels[type] || type;
+  };
+
+  const getHazardRiskLabel = (risk: string) => {
+    const labels: Record<string, string> = {
+      'tidak_ada': 'Tidak Ada',
+      'rendah': 'Rendah',
+      'menengah': 'Menengah',
+      'tinggi': 'Tinggi'
+    };
+    return labels[risk] || risk;
+  };
+
+  const getHazardRiskColor = (risk: string) => {
+    const colors: Record<string, string> = {
+      'tidak_ada': 'bg-gray-100 text-gray-600',
+      'rendah': 'bg-yellow-100 text-yellow-700',
+      'menengah': 'bg-orange-100 text-orange-700',
+      'tinggi': 'bg-red-100 text-red-700',
+    };
+    return colors[risk] ?? 'bg-gray-100 text-gray-600';
   };
 
   const getVolumeLabel = (volume: string) => {
@@ -88,7 +107,7 @@ export default function RiwayatLaporanPage() {
     const labels: Record<string, string> = {
       'sungai': 'Sungai',
       'pinggir_jalan': 'Pinggir Jalan',
-      'area_public': 'Area Publik',
+      'area_publik': 'Area Publik',   // ← BUG-01 fixed: was 'area_public'
       'tanah_kosong': 'Tanah Kosong',
       'lainnya': 'Lainnya'
     };

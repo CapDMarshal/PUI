@@ -8,7 +8,7 @@ interface DetailItemProps {
   iconBgColor?: string;
   iconColor?: string;
   title: string;
-  description: string;
+  description: React.ReactNode;
   actionText?: string;
   onActionClick?: () => void;
   className?: string;
