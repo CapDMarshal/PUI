@@ -215,31 +215,16 @@ in `CreateCampaignForm.tsx`. Implement campaign completion detection
 
 ---
 
-### 🟢 INCOMPLETE-03 — Reports have no `status` column (no verification flow)
+### ✅ ~~INCOMPLETE-03~~ FIXED — Reports have no `status` column (no verification flow)
 
 | Property | Detail |
 |---|---|
-| **Severity** | 🟢 Minor / Informational |
-| **Affected File** | `src/app/akun/riwayat-laporan/page.tsx` (line ~98) |
+| **Status** | ✅ Fixed (2026-04-01) |
+| **Was** | `getStatusBadge()` hardcoded `"Terkirim"` |
+| **Fixed in** | `supabase_schema.sql` · `src/app/akun/riwayat-laporan/page.tsx` |
 
 **Description:**  
-`getStatusBadge()` in the report history page hardcodes `"Terkirim"`
-(Submitted) for every report with a comment:
-```typescript
-// For now, all reports are "Terkirim" since we don't have status field
-```
-There is no report status column in the database. The revalidation flow
-was presumably designed to change this status but was never completed
-(see INCOMPLETE-01).
-
-**Fix (if desired):**  
-Add a `status` column to `public.reports`:
-```sql
-ALTER TABLE public.reports
-  ADD COLUMN status TEXT NOT NULL DEFAULT 'terkirim'
-    CHECK (status IN ('terkirim', 'bersih', 'masih_kotor'));
-```
-Update it when a `revalidations` row is inserted.
+We implemented the Admin validation workflow, adding the `status` column and dynamic badges to the user history page. Reports now transition from `pending` → `approved`/`rejected`/`hazardous`.
 
 ---
 
@@ -281,7 +266,7 @@ If you are forking this project, here is a prioritised action list:
 
 ### Nice to have
 - [ ] **INCOMPLETE-02** — Trigger `CREATE_CAMPAIGN` and `COMPLETE_CAMPAIGN` EXP rewards
-- [ ] **INCOMPLETE-03** — Add `status` column to `reports` for verification lifecycle
+- [x] ~~**INCOMPLETE-03**~~ — Admin validation workflow (done 2026-04-01)
 
 ---
 

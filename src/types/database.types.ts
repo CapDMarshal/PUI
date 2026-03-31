@@ -31,16 +31,19 @@ export interface Database {
           id: string
           created_at: string
           exp: number
+          role: 'user' | 'admin'
         }
         Insert: {
           id: string
           created_at?: string
           exp?: number
+          role?: 'user' | 'admin'
         }
         Update: {
           id?: string
           created_at?: string
           exp?: number
+          role?: 'user' | 'admin'
         }
         Relationships: [
           {
@@ -121,6 +124,10 @@ export interface Database {
           hazard_risk: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi'
           notes: string | null
           location: string // PostGIS geography type (returned as GeoJSON or WKT string)
+          status: 'pending' | 'approved' | 'rejected' | 'hazardous'
+          reviewed_by: string | null
+          reviewed_at: string | null
+          admin_notes: string | null
         }
         Insert: {
           id?: number
@@ -133,6 +140,10 @@ export interface Database {
           hazard_risk?: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi' // defaults to 'tidak_ada'
           notes?: string | null
           location: string // PostGIS geography type
+          status?: 'pending' | 'approved' | 'rejected' | 'hazardous'
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          admin_notes?: string | null
         }
         Update: {
           id?: number
@@ -145,6 +156,10 @@ export interface Database {
           hazard_risk?: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi'
           notes?: string | null
           location?: string // PostGIS geography type
+          status?: 'pending' | 'approved' | 'rejected' | 'hazardous'
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          admin_notes?: string | null
         }
       }
     }
@@ -164,6 +179,7 @@ export interface Database {
           location_category: string
           hazard_risk: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi'
           notes: string | null
+          status: 'pending' | 'approved' | 'rejected' | 'hazardous'
           latitude: number
           longitude: number
         }[]
@@ -230,8 +246,37 @@ export interface Database {
           location_category: string
           hazard_risk: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi'
           notes: string | null
+          status: 'pending' | 'approved' | 'rejected' | 'hazardous'
+          admin_notes: string | null
           latitude: number
           longitude: number
+        }[]
+      }
+      get_pending_reports: {
+        Args: Record<string, never>
+        Returns: {
+          id: number
+          user_id: string
+          image_urls: string[]
+          created_at: string
+          waste_type: 'organik' | 'anorganik' | 'campuran'
+          waste_volume: string
+          location_category: string
+          hazard_risk: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi'
+          notes: string | null
+          status: 'pending' | 'approved' | 'rejected' | 'hazardous'
+          latitude: number
+          longitude: number
+        }[]
+      }
+      get_admin_statistics: {
+        Args: Record<string, never>
+        Returns: {
+          pending_count: number
+          approved_count: number
+          rejected_count: number
+          hazardous_count: number
+          total_count: number
         }[]
       }
     }
@@ -242,6 +287,8 @@ export interface Database {
       hazard_risk_enum: 'tidak_ada' | 'rendah' | 'menengah' | 'tinggi'
       campaign_status_enum: 'upcoming' | 'ongoing' | 'finished'
       campaign_organizer_type_enum: 'personal' | 'organization'
+      report_status_enum: 'pending' | 'approved' | 'rejected' | 'hazardous'
+      role_enum: 'user' | 'admin'
     }
   }
 }

@@ -14,6 +14,8 @@ interface Report {
   waste_volume: string;
   location_category: string;
   notes: string | null;
+  status: string;
+  admin_notes: string | null;
   latitude: number;
   longitude: number;
 }
@@ -114,13 +116,39 @@ export default function RiwayatLaporanPage() {
     return labels[location] || location;
   };
 
-  const getStatusBadge = () => {
-    // For now, all reports are "Terkirim" since we don't have status field
-    return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-        Terkirim
-      </span>
-    );
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+            Menunggu Validasi
+          </span>
+        );
+      case 'approved':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
+            Disetujui
+          </span>
+        );
+      case 'rejected':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+            Ditolak
+          </span>
+        );
+      case 'hazardous':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
+            Berbahaya (Ditangani Petugas)
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+            {status}
+          </span>
+        );
+    }
   };
 
   if (loading) {
@@ -185,7 +213,7 @@ export default function RiwayatLaporanPage() {
                         <h3 className="font-semibold text-gray-900">
                           Laporan #{report.id}
                         </h3>
-                        {getStatusBadge()}
+                        {getStatusBadge(report.status)}
                       </div>
                       <p className="text-sm text-gray-500">
                         {formatDate(report.created_at)}
@@ -233,6 +261,17 @@ export default function RiwayatLaporanPage() {
                         <span className="text-gray-600 flex-1">
                           {report.notes}
                         </span>
+                      </div>
+                    )}
+                    {report.status === 'rejected' && report.admin_notes && (
+                      <div className="mt-3 p-3 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2">
+                        <svg className="w-4 h-4 text-red-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <p className="text-xs font-semibold text-red-800 mb-0.5">Alasan Penolakan:</p>
+                          <p className="text-sm text-red-700">{report.admin_notes}</p>
+                        </div>
                       </div>
                     )}
                   </div>

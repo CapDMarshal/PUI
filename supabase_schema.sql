@@ -50,7 +50,9 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";      -- uuid_generate_v4()
 CREATE TABLE IF NOT EXISTS public.profiles (
   id         UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  exp        INTEGER     NOT NULL DEFAULT 0
+  exp        INTEGER     NOT NULL DEFAULT 0,
+  role       TEXT        NOT NULL DEFAULT 'user'
+    CHECK (role IN ('user','admin'))
 );
 
 
@@ -72,7 +74,13 @@ CREATE TABLE IF NOT EXISTS public.reports (
   hazard_risk       TEXT            NOT NULL DEFAULT 'tidak_ada'
     CHECK (hazard_risk       IN ('tidak_ada','rendah','menengah','tinggi')),
   notes             TEXT,
-  location          GEOGRAPHY(POINT, 4326) NOT NULL   -- stored as POINT(longitude latitude)
+  location          GEOGRAPHY(POINT, 4326) NOT NULL,  -- stored as POINT(longitude latitude)
+  -- ── Admin review fields ─────────────────────────
+  status            TEXT            NOT NULL DEFAULT 'pending'
+    CHECK (status   IN ('pending','approved','rejected','hazardous')),
+  reviewed_by       UUID            REFERENCES auth.users(id),        -- which admin reviewed
+  reviewed_at       TIMESTAMPTZ,                                       -- when reviewed
+  admin_notes       TEXT                                               -- rejection reason shown to user
 );
 
 -- Spatial index (required for ST_DWithin / ST_Distance queries)
@@ -132,11 +140,27 @@ CREATE POLICY "Users can update own profile"  ON public.profiles FOR UPDATE USIN
 
 -- reports
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Anyone can view reports"                  ON public.reports FOR SELECT USING (true);
+-- Users see: their own reports (any status) + others' approved/hazardous only
+CREATE POLICY "Users can view relevant reports" ON public.reports FOR SELECT
+  USING (
+    auth.uid() = user_id
+    OR status IN ('approved', 'hazardous')
+  );
+-- Admins can see ALL reports regardless of status
+CREATE POLICY "Admins can view all reports" ON public.reports FOR SELECT
+  USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+  );
 CREATE POLICY "Authenticated users can insert reports"   ON public.reports FOR INSERT
   WITH CHECK (auth.uid() = user_id);
+-- Users can update their own non-status fields
 CREATE POLICY "Users can update own reports"             ON public.reports FOR UPDATE
   USING (auth.uid() = user_id);
+-- Admins can update any report (for status changes)
+CREATE POLICY "Admins can update any report"             ON public.reports FOR UPDATE
+  USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+  );
 CREATE POLICY "Users can delete own reports"             ON public.reports FOR DELETE
   USING (auth.uid() = user_id);
 
@@ -220,9 +244,11 @@ RETURNS TABLE (
   image_urls        TEXT[],
   created_at        TIMESTAMPTZ,
   waste_type        TEXT,
+  hazard_risk       TEXT,
   waste_volume      TEXT,
   location_category TEXT,
   notes             TEXT,
+  status            TEXT,
   latitude          DOUBLE PRECISION,
   longitude         DOUBLE PRECISION
 )
@@ -238,12 +264,15 @@ BEGIN
     r.image_urls,
     r.created_at,
     r.waste_type,
+    r.hazard_risk,
     r.waste_volume,
     r.location_category,
     r.notes,
+    r.status,
     ST_Y(r.location::geometry) AS latitude,
     ST_X(r.location::geometry) AS longitude
   FROM public.reports r
+  WHERE r.status IN ('approved', 'hazardous')  -- only validated reports on public map
   ORDER BY r.created_at DESC;
 END;
 $$;
@@ -259,9 +288,12 @@ RETURNS TABLE (
   image_urls        TEXT[],
   created_at        TIMESTAMPTZ,
   waste_type        TEXT,
+  hazard_risk       TEXT,
   waste_volume      TEXT,
   location_category TEXT,
   notes             TEXT,
+  status            TEXT,
+  admin_notes       TEXT,
   latitude          DOUBLE PRECISION,
   longitude         DOUBLE PRECISION
 )
@@ -277,9 +309,12 @@ BEGIN
     r.image_urls,
     r.created_at,
     r.waste_type,
+    r.hazard_risk,
     r.waste_volume,
     r.location_category,
     r.notes,
+    r.status,
+    r.admin_notes,
     ST_Y(r.location::geometry) AS latitude,
     ST_X(r.location::geometry) AS longitude
   FROM public.reports r
@@ -378,6 +413,7 @@ BEGIN
     ST_GeogFromText('POINT(' || p_longitude || ' ' || p_latitude || ')'),
     p_radius_meters
   )
+  AND r.status IN ('approved', 'hazardous')  -- only validated reports shown publicly
   ORDER BY distance_km ASC
   LIMIT p_limit;
 END;
@@ -600,7 +636,8 @@ BEGIN
     waste_volume,
     location_category,
     notes,
-    location
+    location,
+    status
   )
   VALUES (
     p_user_id,
@@ -610,9 +647,80 @@ BEGIN
     p_waste_volume,
     p_location_category,
     p_notes,
-    ST_GeogFromText('POINT(' || p_longitude || ' ' || p_latitude || ')')
+    ST_GeogFromText('POINT(' || p_longitude || ' ' || p_latitude || ')'),
+    'pending'
   )
   RETURNING reports.id, reports.created_at;
+END;
+$$;
+
+
+-- ── 7l. get_pending_reports ──────────────────────────────────
+-- Returns all reports that need validation by an admin.
+CREATE OR REPLACE FUNCTION public.get_pending_reports()
+RETURNS TABLE (
+  id                INTEGER,
+  user_id           UUID,
+  image_urls        TEXT[],
+  created_at        TIMESTAMPTZ,
+  waste_type        TEXT,
+  hazard_risk       TEXT,
+  waste_volume      TEXT,
+  location_category TEXT,
+  notes             TEXT,
+  status            TEXT,
+  latitude          DOUBLE PRECISION,
+  longitude         DOUBLE PRECISION
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    r.id,
+    r.user_id,
+    r.image_urls,
+    r.created_at,
+    r.waste_type,
+    r.hazard_risk,
+    r.waste_volume,
+    r.location_category,
+    r.notes,
+    r.status,
+    ST_Y(r.location::geometry) AS latitude,
+    ST_X(r.location::geometry) AS longitude
+  FROM public.reports r
+  WHERE r.status = 'pending'
+  ORDER BY r.created_at ASC;
+END;
+$$;
+
+
+-- ── 7m. get_admin_statistics ─────────────────────────────────
+-- Returns overall report counts grouped by status.
+CREATE OR REPLACE FUNCTION public.get_admin_statistics()
+RETURNS TABLE (
+  pending_count   BIGINT,
+  approved_count  BIGINT,
+  rejected_count  BIGINT,
+  hazardous_count BIGINT,
+  total_count     BIGINT
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COUNT(*) FILTER (WHERE status = 'pending') AS pending_count,
+    COUNT(*) FILTER (WHERE status = 'approved') AS approved_count,
+    COUNT(*) FILTER (WHERE status = 'rejected') AS rejected_count,
+    COUNT(*) FILTER (WHERE status = 'hazardous') AS hazardous_count,
+    COUNT(*) AS total_count
+  FROM public.reports;
 END;
 $$;
 
@@ -747,6 +855,12 @@ $$;
 --   'area_public' (no 'k') as a label key. Fixed to 'area_publik' in:
 --     src/hooks/useReports.ts
 --     src/app/akun/riwayat-laporan/page.tsx
+--
+-- ── Revision: Admin Dashboard & Validation (applied 2026-04-01) ───────────
+--   Added `role` to `public.profiles` ('user' | 'admin').
+--   Added `status`, `reviewed_by`, `reviewed_at`, `admin_notes` to `public.reports`.
+--   Added `get_pending_reports()` & `get_admin_statistics()`.
+--   RLS updated: pending reports hidden from public map queries.
 --
 -- ── Still open: dashboard/buat-campaign is a prototype ────────────────
 --   src/app/dashboard/buat-campaign/page.tsx has a // TODO and does not

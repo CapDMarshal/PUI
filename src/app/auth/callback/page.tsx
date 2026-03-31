@@ -31,10 +31,23 @@ export default function AuthCallbackPage() {
           // Ensure profile exists for the authenticated user
           if (data.session?.user) {
             await ensureProfileExists(data.session.user.id);
-          }
+            
+            // Check role
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', data.session.user.id)
+              .single();
 
-          // Redirect to dashboard on success
-          router.push('/dashboard');
+            if ((profile as any)?.role === 'admin') {
+              router.push('/admin');
+            } else {
+              router.push('/dashboard');
+            }
+          } else {
+            // Redirect to dashboard as fallback
+            router.push('/dashboard');
+          }
         } else {
           // No token found, redirect to login
           router.push('/login');

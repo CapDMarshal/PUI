@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import { loginWithEmail, loginWithGoogle } from '@/lib/auth';
 import { getErrorMessage } from '@/utils/errorMessages';
 
@@ -59,8 +60,18 @@ export function useLogin() {
       }
 
       if (data.user) {
-        // Redirect to dashboard
-        router.push('/dashboard');
+        // Fetch role to determine redirect
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single();
+
+        if ((profile as any)?.role === 'admin') {
+          router.push('/admin');
+        } else {
+          router.push('/dashboard');
+        }
       }
     } catch (error) {
       setErrors({ email: 'Terjadi kesalahan. Silakan coba lagi.' });
